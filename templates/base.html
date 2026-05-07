@@ -282,7 +282,7 @@
 
 <div class="main">
   <div class="topbar">
-    <h1>{% block title %}InstaControl{% endblock %}</h1>
+    <h1>{{ self.title() }}</h1>
     {% block topbar_extra %}{% endblock %}
   </div>
   <div class="content">

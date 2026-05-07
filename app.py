@@ -34,10 +34,17 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "!Hesoyam3451")
 
 # ── Bootstrap ────────────────────────────────────────────────────────────────
 
-db.init_db()
-db.seed_admin(ADMIN_EMAIL, generate_password_hash(ADMIN_PASSWORD))
-db.seed_ai_agent()
-queue_worker.start()
+try:
+    db.init_db()
+    db.seed_admin(ADMIN_EMAIL, generate_password_hash(ADMIN_PASSWORD))
+    db.seed_ai_agent()
+except Exception as _e:
+    logging.getLogger(__name__).error("DB init error: %s", _e)
+
+try:
+    queue_worker.start()
+except Exception as _e:
+    logging.getLogger(__name__).error("Queue worker failed to start: %s", _e)
 
 # ── Auth helpers ─────────────────────────────────────────────────────────────
 

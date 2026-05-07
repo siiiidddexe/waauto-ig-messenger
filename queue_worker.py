@@ -1,11 +1,12 @@
 import logging
+from datetime import timezone as _tz
 from apscheduler.schedulers.background import BackgroundScheduler
 
 import db
 import instagram as ig
 
 logger = logging.getLogger(__name__)
-scheduler = BackgroundScheduler(timezone="UTC")
+scheduler = BackgroundScheduler(timezone=_tz.utc)
 
 
 def process_queue():

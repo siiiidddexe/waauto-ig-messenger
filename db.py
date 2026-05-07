@@ -119,12 +119,23 @@ def seed_admin(email: str, password_hash: str):
 
 def seed_ai_agent():
     now = datetime.utcnow().isoformat()
+    # Assemble Gemini key from env halves so it's pre-filled on first boot.
+    gemini_key = (os.environ.get("GEMINI_KEY_1", "") + os.environ.get("GEMINI_KEY_2", "")).strip()
     with get_conn() as conn:
         existing = conn.execute("SELECT id FROM ai_agent").fetchone()
         if not existing:
             conn.execute(
-                "INSERT INTO ai_agent(name, enabled, system_prompt, created_at, updated_at) VALUES(?,?,?,?,?)",
-                ("Support Agent", 0, "You are a helpful support assistant. Be friendly and concise.", now, now),
+                """INSERT INTO ai_agent
+                   (name, enabled, gemini_api_key, system_prompt, created_at, updated_at)
+                   VALUES(?,?,?,?,?,?)""",
+                ("Support Agent", 0, gemini_key,
+                 "You are a helpful support assistant. Be friendly and concise.", now, now),
+            )
+        elif gemini_key:
+            # Update existing row only if key is currently blank.
+            conn.execute(
+                "UPDATE ai_agent SET gemini_api_key=? WHERE gemini_api_key IS NULL OR gemini_api_key=''",
+                (gemini_key,),
             )
 
 

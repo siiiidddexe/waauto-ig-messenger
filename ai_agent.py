@@ -1,6 +1,14 @@
+import os
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _env_key() -> str:
+    """Assemble Gemini API key from the two env-var halves."""
+    p1 = os.environ.get("GEMINI_KEY_1", "")
+    p2 = os.environ.get("GEMINI_KEY_2", "")
+    return (p1 + p2).strip()
 
 
 def get_ai_reply(message_text: str, agent_config: dict) -> str | None:
@@ -11,7 +19,8 @@ def get_ai_reply(message_text: str, agent_config: dict) -> str | None:
     try:
         import google.generativeai as genai
 
-        api_key = agent_config.get("gemini_api_key", "").strip()
+        # Prefer the key stored in the DB; fall back to env-assembled key.
+        api_key = (agent_config.get("gemini_api_key") or "").strip() or _env_key()
         if not api_key:
             logger.warning("Gemini API key not configured.")
             return None

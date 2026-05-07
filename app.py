@@ -444,13 +444,15 @@ def public_queue():
 def webhook_verify():
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
-    logger.info("Webhook verify attempt — mode=%s token_match=%s", mode, token == WEBHOOK_VERIFY_TOKEN)
+    challenge = request.args.get("hub.challenge", "")
+    logger.info("Webhook verify — mode=%s token_match=%s challenge=%s", mode, token == WEBHOOK_VERIFY_TOKEN, challenge)
     if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
-        logger.info("Webhook verified successfully")
-        return challenge, 200, {"Content-Type": "text/plain"}
-    logger.warning("Webhook verify FAILED — received token: %s", token)
-    abort(403)
+        logger.info("Webhook verified OK")
+        from flask import Response
+        return Response(challenge, status=200, mimetype="text/plain")
+    logger.warning("Webhook verify FAILED — got token: %r expected: %r", token, WEBHOOK_VERIFY_TOKEN)
+    from flask import Response
+    return Response("Forbidden", status=403, mimetype="text/plain")
 
 
 @app.route("/webhook-test")

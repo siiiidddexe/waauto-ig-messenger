@@ -536,6 +536,54 @@ def health():
     })
 
 
+# ── Meta / Instagram required endpoints ──────────────────────────────────────
+
+@app.route("/auth/callback")
+def auth_callback():
+    """
+    OAuth redirect URI for Instagram Business Login.
+    Meta redirects here after the user completes the login flow.
+    In a multi-tenant app you'd exchange the 'code' for an access token here.
+    For this single-owner dashboard we just confirm and redirect to home.
+    """
+    code = request.args.get("code")
+    error = request.args.get("error")
+    if error:
+        logger.warning("OAuth error: %s — %s", error, request.args.get("error_description"))
+        return render_template("login.html", error=f"Instagram OAuth error: {error}"), 400
+    if code:
+        logger.info("OAuth code received (single-owner setup — no exchange needed): %s…", code[:8])
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/deauthorize", methods=["GET", "POST"])
+def deauthorize():
+    """
+    Deauthorize callback URL.
+    Meta calls this (POST) when a user removes your app.
+    Must return HTTP 200.
+    """
+    payload = request.get_json(force=True, silent=True) or {}
+    logger.info("Deauthorize callback received: %s", payload)
+    return jsonify({"ok": True}), 200
+
+
+@app.route("/data-deletion", methods=["GET", "POST"])
+def data_deletion():
+    """
+    Data Deletion Request URL (GDPR).
+    Meta calls this when a user requests their data be deleted.
+    Must return a JSON body with a url and confirmation_code.
+    """
+    payload = request.get_json(force=True, silent=True) or {}
+    logger.info("Data deletion request: %s", payload)
+    # Return the required Meta format
+    return jsonify({
+        "url": "https://instapy.logiclaunch.in/data-deletion",
+        "confirmation_code": "instapy_data_deletion_confirmed",
+    }), 200
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=os.environ.get("FLASK_DEBUG", "0") == "1")

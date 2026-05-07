@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}AI Agent{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+  <!-- Config -->
+  <div class="card">
+    <div class="card-title">🤖 Agent Configuration</div>
+
+    <div class="form-group flex gap-2" style="align-items:center;">
+      <label style="margin:0;flex:1;">Enable AI Agent</label>
+      <label class="toggle">
+        <input type="checkbox" id="ag-enabled" {% if agent and agent.enabled %}checked{% endif %}/>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="form-group">
+      <label>Agent Name</label>
+      <input type="text" id="ag-name" value="{{ agent.name if agent else 'Support Agent' }}" placeholder="e.g. Support Bot"/>
+    </div>
+
+    <div class="form-group">
+      <label>Wakeword (optional)</label>
+      <input type="text" id="ag-wakeword" value="{{ agent.wakeword or '' if agent else '' }}" placeholder="e.g. /ai, help me, support"/>
+      <p class="text-sm text-muted mt-2">Leave blank for <strong>always-on</strong> mode (replies to every message). Set a wakeword to only trigger when the message contains it.</p>
+    </div>
+
+    <div class="form-group">
+      <label>Gemini API Key</label>
+      <input type="password" id="ag-apikey" value="{{ agent.gemini_api_key or '' if agent else '' }}" placeholder="AIza…"/>
+      <p class="text-sm text-muted mt-2">Get your key at <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--p);">aistudio.google.com</a></p>
+    </div>
+
+    <div class="form-group">
+      <label>Gemini Model</label>
+      <select id="ag-model">
+        <option value="gemini-1.5-flash" {% if agent and agent.gemini_model == 'gemini-1.5-flash' %}selected{% endif %}>gemini-1.5-flash (fast, free tier)</option>
+        <option value="gemini-1.5-pro" {% if agent and agent.gemini_model == 'gemini-1.5-pro' %}selected{% endif %}>gemini-1.5-pro (smarter)</option>
+        <option value="gemini-2.0-flash" {% if agent and agent.gemini_model == 'gemini-2.0-flash' %}selected{% endif %}>gemini-2.0-flash (latest)</option>
+      </select>
+    </div>
+
+    <button class="btn btn-primary" onclick="saveAgent()">Save Configuration</button>
+  </div>
+
+  <!-- System Prompt / Company Context -->
+  <div style="display:flex;flex-direction:column;gap:20px;">
+    <div class="card" style="flex:1;">
+      <div class="card-title">📄 Company Context / System Prompt</div>
+      <p class="text-sm text-muted mb-3">This text is given to Gemini as its identity and context. Include your company info, FAQs, tone, and instructions.</p>
+      <div class="form-group">
+        <textarea id="ag-prompt" rows="10" placeholder="You are a helpful support agent for [Company Name].
+
+About us: We sell premium widgets at widget.com.
+
+FAQ:
+- Shipping: 3-5 business days
+- Returns: 30 day policy
+- Email: support@widget.com
+
+Always be friendly, concise, and redirect complex issues to our support email.">{{ agent.system_prompt if agent else '' }}</textarea>
+      </div>
+      <button class="btn btn-outline" onclick="saveAgent()">Save Prompt</button>
+    </div>
+  </div>
+</div>
+
+<!-- Test Interface -->
+<div class="card" style="margin-top:20px;">
+  <div class="card-title">🧪 Test the AI Agent</div>
+  <div class="flex gap-2">
+    <input type="text" id="test-msg" placeholder="Send a test message to the AI…" style="flex:1;" onkeydown="if(event.key==='Enter') testAgent()"/>
+    <button class="btn btn-primary" onclick="testAgent()">Test</button>
+  </div>
+  <div id="test-result" style="display:none;margin-top:14px;padding:14px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);font-size:14px;line-height:1.6;"></div>
+</div>
+
+<!-- How it works -->
+<div class="card" style="margin-top:20px;">
+  <div class="card-title">ℹ️ How the AI Agent Works</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;">
+    <div>
+      <div style="font-size:20px;margin-bottom:6px;">1️⃣</div>
+      <div style="font-size:13px;font-weight:600;">Incoming message</div>
+      <div class="text-sm text-muted mt-2">Someone DMs your Instagram account</div>
+    </div>
+    <div>
+      <div style="font-size:20px;margin-bottom:6px;">2️⃣</div>
+      <div style="font-size:13px;font-weight:600;">Wakeword check</div>
+      <div class="text-sm text-muted mt-2">If wakeword set, checks if message contains it</div>
+    </div>
+    <div>
+      <div style="font-size:20px;margin-bottom:6px;">3️⃣</div>
+      <div style="font-size:13px;font-weight:600;">Gemini generates reply</div>
+      <div class="text-sm text-muted mt-2">Using your system prompt as context</div>
+    </div>
+    <div>
+      <div style="font-size:20px;margin-bottom:6px;">4️⃣</div>
+      <div style="font-size:13px;font-weight:600;">Auto-reply sent</div>
+      <div class="text-sm text-muted mt-2">Response sent instantly via Instagram API</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function saveAgent() {
+  const body = {
+    name: document.getElementById('ag-name').value.trim(),
+    enabled: document.getElementById('ag-enabled').checked ? 1 : 0,
+    wakeword: document.getElementById('ag-wakeword').value.trim(),
+    gemini_api_key: document.getElementById('ag-apikey').value.trim(),
+    gemini_model: document.getElementById('ag-model').value,
+    system_prompt: document.getElementById('ag-prompt').value.trim(),
+  };
+  try {
+    await apiFetch('/api/ai-agent', { method:'POST', body });
+    toast('Agent configuration saved!','ok');
+  } catch(e) { toast(e.message,'err'); }
+}
+
+async function testAgent() {
+  const msg = document.getElementById('test-msg').value.trim();
+  if (!msg) { toast('Enter a test message','err'); return; }
+
+  // Save first to ensure latest config is used
+  await saveAgent();
+
+  const resEl = document.getElementById('test-result');
+  resEl.style.display = 'block';
+  resEl.textContent = 'Thinking…';
+  try {
+    const r = await apiFetch('/api/ai-agent/test', { method:'POST', body:{ message: msg } });
+    resEl.innerHTML = `<strong style="color:var(--p);">AI:</strong> ${r.reply.replace(/\n/g,'<br/>')}`;
+  } catch(e) {
+    resEl.style.color = 'var(--danger)';
+    resEl.textContent = 'Error: ' + e.message;
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Message Queue{% endblock %}
+
+{% block topbar_extra %}
+<span class="badge ml-auto">{{ items | selectattr('status','eq','pending') | list | length }} pending</span>
+{% endblock %}
+
+{% block content %}
+<div class="grid-2" style="margin-bottom:20px;">
+  <!-- Schedule form -->
+  <div class="card">
+    <div class="card-title">➕ Schedule / Instant Send</div>
+    <div class="form-group">
+      <label>Recipient (username or IG ID)</label>
+      <input type="text" id="q-recipient" placeholder="username or numeric ID…"/>
+    </div>
+    <div class="form-group">
+      <label>Message</label>
+      <textarea id="q-message" placeholder="Your message…" rows="3"></textarea>
+    </div>
+    <div class="form-group">
+      <label>Schedule (leave blank for instant send)</label>
+      <input type="datetime-local" id="q-scheduled"/>
+    </div>
+    <button class="btn btn-primary" onclick="addToQueue()">Add to Queue</button>
+  </div>
+
+  <!-- API usage -->
+  <div class="card">
+    <div class="card-title">📡 Send via API (from your apps)</div>
+    <p class="text-sm text-muted mb-3">Use your API key to send messages programmatically:</p>
+    <div class="copy-wrap">
+      <div class="code-block" id="api-example">POST https://instapy.logiclaunch.in/api/v1/send
+X-API-Key: YOUR_API_KEY
+
+{
+  "recipient": "username_or_igsid",
+  "message": "Hello from my app!",
+  "scheduled_at": "2026-05-09T10:00:00Z"
+}</div>
+      <button class="copy-btn" onclick="copyText(document.getElementById('api-example').textContent)">Copy</button>
+    </div>
+    <div class="mt-2">
+      <a href="/api-keys" class="btn btn-outline btn-sm">Manage API Keys →</a>
+    </div>
+  </div>
+</div>
+
+<!-- Queue table -->
+<div class="card">
+  <div class="flex gap-2 mb-3">
+    <div class="card-title" style="margin-bottom:0;">Queue History</div>
+    <div class="ml-auto flex gap-2">
+      <select id="filter-status" onchange="filterTable(this.value)" style="width:auto;padding:5px 10px;font-size:12px;">
+        <option value="">All</option>
+        <option value="pending">Pending</option>
+        <option value="sent">Sent</option>
+        <option value="failed">Failed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+      <button class="btn btn-outline btn-sm" onclick="location.reload()">↻ Refresh</button>
+    </div>
+  </div>
+  {% if items %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Recipient</th><th>Message</th><th>Scheduled</th>
+          <th>Status</th><th>Source</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="queue-body">
+        {% for item in items %}
+        <tr data-status="{{ item.status }}" data-id="{{ item.id }}">
+          <td class="text-muted mono text-sm">{{ item.id }}</td>
+          <td>
+            <div style="font-weight:600;font-size:13px;">{{ item.recipient_name or item.recipient_id }}</div>
+            <div class="text-sm text-muted mono">{{ item.recipient_id }}</div>
+          </td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" class="text-sm">
+            {{ item.message or '[media]' }}
+          </td>
+          <td class="text-sm">{{ item.scheduled_at[:16].replace('T',' ') if item.scheduled_at else '—' }}</td>
+          <td>
+            {% if item.status == 'sent' %}<span class="badge-pill badge-success">Sent</span>
+            {% elif item.status == 'pending' %}<span class="badge-pill badge-warning">Pending</span>
+            {% elif item.status == 'failed' %}<span class="badge-pill badge-danger" title="{{ item.error or '' }}">Failed</span>
+            {% else %}<span class="badge-pill badge-muted">{{ item.status|capitalize }}</span>
+            {% endif %}
+          </td>
+          <td class="text-sm text-muted">{{ item.source }}</td>
+          <td>
+            {% if item.status == 'pending' %}
+            <button class="btn btn-danger btn-sm" onclick="cancelItem({{ item.id }}, this)">Cancel</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">No messages in queue yet.</div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function addToQueue() {
+  const recipient = document.getElementById('q-recipient').value.trim();
+  const text = document.getElementById('q-message').value.trim();
+  const scheduled = document.getElementById('q-scheduled').value;
+  if (!recipient || !text) { toast('Recipient and message required','err'); return; }
+  const body = { recipient_id: recipient, text };
+  if (scheduled) body.scheduled_at = new Date(scheduled).toISOString();
+  try {
+    const r = await apiFetch('/api/queue', { method:'POST', body });
+    toast(scheduled ? `Scheduled (ID: ${r.queue_id})` : `Queued for instant send (ID: ${r.queue_id})`, 'ok');
+    setTimeout(() => location.reload(), 1200);
+  } catch(e) { toast(e.message,'err'); }
+}
+
+async function cancelItem(id, btn) {
+  if (!confirm('Cancel this message?')) return;
+  try {
+    await apiFetch(`/api/queue/${id}`, { method:'DELETE' });
+    btn.closest('tr').querySelector('[data-status]')?.setAttribute('data-status','cancelled');
+    btn.closest('tr').querySelector('.badge-pill').outerHTML = '<span class="badge-pill badge-muted">Cancelled</span>';
+    btn.remove();
+    toast('Cancelled','ok');
+  } catch(e) { toast(e.message,'err'); }
+}
+
+function filterTable(status) {
+  document.querySelectorAll('#queue-body tr').forEach(tr => {
+    tr.style.display = (!status || tr.dataset.status === status) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

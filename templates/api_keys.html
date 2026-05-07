@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}API Keys{% endblock %}
+
+{% block content %}
+
+{% if new_key %}
+<div style="background:#14532d;border:1px solid var(--success);border-radius:var(--r);padding:16px 20px;margin-bottom:20px;">
+  <div style="font-weight:700;color:var(--success);margin-bottom:8px;">✅ New API Key Created — Copy it now, it won't be shown again!</div>
+  <div class="copy-wrap">
+    <div class="code-block" id="new-key-display" style="color:var(--success);">{{ new_key }}</div>
+    <button class="copy-btn" onclick="copyText('{{ new_key }}')">Copy</button>
+  </div>
+</div>
+{% endif %}
+
+<div class="grid-2" style="margin-bottom:20px;">
+  <!-- Create key -->
+  <div class="card">
+    <div class="card-title">➕ Generate New API Key</div>
+    <div class="form-group">
+      <label>Key Name</label>
+      <input type="text" id="key-name" placeholder="e.g. My Web App, CRM Notifier"/>
+    </div>
+    <div class="form-group">
+      <label>Description (optional)</label>
+      <input type="text" id="key-desc" placeholder="What will this key be used for?"/>
+    </div>
+    <button class="btn btn-primary" onclick="generateKey()">Generate Key</button>
+  </div>
+
+  <!-- Usage info -->
+  <div class="card">
+    <div class="card-title">📡 API Usage</div>
+    <p class="text-sm text-muted mb-3">Base URL: <span class="mono" style="color:var(--text);">https://instapy.logiclaunch.in</span></p>
+    <div class="copy-wrap mb-3">
+      <div class="code-block">POST /api/v1/send
+X-API-Key: igk_YOUR_KEY_HERE
+
+{
+  "recipient": "username_or_igsid",
+  "message": "Hello! 👋",
+  "scheduled_at": "2026-05-09T10:00:00Z"
+}</div>
+      <button class="copy-btn" onclick="copyText('POST /api/v1/send\nX-API-Key: igk_YOUR_KEY_HERE\n\n{\n  \"recipient\": \"username_or_igsid\",\n  \"message\": \"Hello! 👋\"\n}')">Copy</button>
+    </div>
+    <p class="text-sm text-muted"><code>scheduled_at</code> is optional — omit for instant send.</p>
+    <p class="text-sm text-muted mt-2">Response: <code>{"ok": true, "message_id": "..."}</code></p>
+  </div>
+</div>
+
+<!-- Keys table -->
+<div class="card">
+  <div class="card-title">🔑 Your API Keys</div>
+  {% if keys %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Key Prefix</th><th>Description</th><th>Created</th><th>Last Used</th><th>Status</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for k in keys %}
+        <tr id="key-{{ k.id }}">
+          <td style="font-weight:600;">{{ k.name }}</td>
+          <td class="mono text-sm">{{ k.key_prefix }}…</td>
+          <td class="text-sm text-muted">{{ k.description or '—' }}</td>
+          <td class="text-sm">{{ k.created_at[:10] if k.created_at else '—' }}</td>
+          <td class="text-sm">{{ k.last_used[:16].replace('T',' ') if k.last_used else 'Never' }}</td>
+          <td>
+            {% if k.enabled %}
+            <span class="badge-pill badge-success">Active</span>
+            {% else %}
+            <span class="badge-pill badge-danger">Revoked</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if k.enabled %}
+            <button class="btn btn-danger btn-sm" onclick="revokeKey({{ k.id }}, this)">Revoke</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">No API keys yet. Generate one above to start using the API.</div>
+  {% endif %}
+</div>
+
+<!-- Full API docs -->
+<div class="card" style="margin-top:20px;">
+  <div class="card-title">📖 API Reference</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div>
+      <p style="font-weight:600;margin-bottom:8px;">Instant Send</p>
+      <div class="code-block">curl -X POST https://instapy.logiclaunch.in/api/v1/send \
+  -H "X-API-Key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"recipient":"username","message":"Hi!"}'</div>
+    </div>
+    <div>
+      <p style="font-weight:600;margin-bottom:8px;">Scheduled Send</p>
+      <div class="code-block">curl -X POST https://instapy.logiclaunch.in/api/v1/send \
+  -H "X-API-Key: YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipient": "username",
+    "message": "Reminder: your appointment!",
+    "scheduled_at": "2026-05-10T09:00:00Z"
+  }'</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function generateKey() {
+  const name = document.getElementById('key-name').value.trim();
+  const description = document.getElementById('key-desc').value.trim();
+  if (!name) { toast('Key name required','err'); return; }
+  try {
+    const r = await apiFetch('/api/api-keys', { method:'POST', body:{name,description} });
+    toast('Key generated! Copying to clipboard…','ok');
+    await navigator.clipboard.writeText(r.key).catch(()=>{});
+    // Show it prominently
+    const div = document.createElement('div');
+    div.style.cssText = 'background:#14532d;border:1px solid #22c55e;border-radius:10px;padding:16px;margin-bottom:16px;';
+    div.innerHTML = `<div style="font-weight:700;color:#22c55e;margin-bottom:8px;">✅ New Key (copy now!):</div>
+      <code style="color:#22c55e;word-break:break-all;font-size:14px;">${r.key}</code>
+      <button onclick="copyText('${r.key}')" style="margin-left:12px;background:transparent;border:1px solid #22c55e;color:#22c55e;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;">Copy</button>`;
+    document.querySelector('.content').prepend(div);
+    setTimeout(() => location.reload(), 5000);
+  } catch(e) { toast(e.message,'err'); }
+}
+
+async function revokeKey(id, btn) {
+  if (!confirm('Revoke this API key? This cannot be undone.')) return;
+  try {
+    await apiFetch(`/api/api-keys/${id}`, { method:'DELETE' });
+    btn.closest('tr').querySelector('.badge-pill').outerHTML = '<span class="badge-pill badge-danger">Revoked</span>';
+    btn.remove();
+    toast('Key revoked','ok');
+  } catch(e) { toast(e.message,'err'); }
+}
+</script>
+{% endblock %}

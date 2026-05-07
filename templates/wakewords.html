@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Wakewords{% endblock %}
+
+{% block content %}
+<div class="grid-2" style="margin-bottom:20px;">
+  <!-- Add wakeword -->
+  <div class="card">
+    <div class="card-title">➕ New Wakeword</div>
+    <div class="form-group">
+      <label>Phrase / Pattern</label>
+      <input type="text" id="ww-phrase" placeholder="e.g. help, order status, /start"/>
+    </div>
+    <div class="form-group">
+      <label>Match Type</label>
+      <select id="ww-match">
+        <option value="contains">Contains (case-insensitive)</option>
+        <option value="exact">Exact match</option>
+        <option value="starts_with">Starts with</option>
+        <option value="regex">Regex</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Auto-reply Text</label>
+      <textarea id="ww-reply" placeholder="The message to send when this wakeword is triggered…" rows="3"></textarea>
+    </div>
+    <button class="btn btn-primary" onclick="createWakeword()">Add Wakeword</button>
+  </div>
+
+  <!-- Info -->
+  <div class="card">
+    <div class="card-title">ℹ️ How Wakewords Work</div>
+    <p class="text-sm" style="color:var(--text);line-height:1.7;">
+      When an inbound Instagram message matches a wakeword, the app <strong>automatically replies</strong> with your preset text — no AI needed.
+    </p>
+    <br/>
+    <p class="text-sm text-muted"><strong style="color:var(--text);">Contains</strong> — message includes the phrase anywhere</p>
+    <p class="text-sm text-muted mt-2"><strong style="color:var(--text);">Exact</strong> — message is exactly the phrase</p>
+    <p class="text-sm text-muted mt-2"><strong style="color:var(--text);">Starts with</strong> — message begins with the phrase</p>
+    <p class="text-sm text-muted mt-2"><strong style="color:var(--text);">Regex</strong> — full Python regex pattern (case-insensitive)</p>
+    <br/>
+    <p class="text-sm text-muted">Wakewords are checked before the AI agent. The first match wins.</p>
+  </div>
+</div>
+
+<!-- Wakeword table -->
+<div class="card">
+  <div class="card-title">⚡ Active Wakewords</div>
+  {% if wakewords %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Phrase</th><th>Match</th><th>Reply</th><th>Triggers</th><th>Enabled</th><th>Actions</th></tr>
+      </thead>
+      <tbody id="ww-table">
+        {% for ww in wakewords %}
+        <tr id="ww-{{ ww.id }}">
+          <td class="mono" style="font-size:13px;">{{ ww.phrase }}</td>
+          <td><span class="badge-pill badge-info">{{ ww.match_type }}</span></td>
+          <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" class="text-sm">{{ ww.reply_text }}</td>
+          <td class="text-sm">{{ ww.trigger_count }}</td>
+          <td>
+            <label class="toggle">
+              <input type="checkbox" {% if ww.enabled %}checked{% endif %} onchange="toggleWW({{ ww.id }}, this.checked)"/>
+              <span class="toggle-slider"></span>
+            </label>
+          </td>
+          <td class="flex gap-2">
+            <button class="btn btn-outline btn-sm" onclick="editWW({{ ww.id }}, {{ ww | tojson }})">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteWW({{ ww.id }})">Delete</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">No wakewords yet. Add one above to auto-reply to messages.</div>
+  {% endif %}
+</div>
+
+<!-- Edit modal -->
+<div id="edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center;">
+  <div class="card" style="width:500px;max-width:95vw;">
+    <div class="card-title">✏️ Edit Wakeword</div>
+    <input type="hidden" id="edit-id"/>
+    <div class="form-group">
+      <label>Phrase</label>
+      <input type="text" id="edit-phrase"/>
+    </div>
+    <div class="form-group">
+      <label>Match Type</label>
+      <select id="edit-match">
+        <option value="contains">Contains</option>
+        <option value="exact">Exact</option>
+        <option value="starts_with">Starts with</option>
+        <option value="regex">Regex</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Reply Text</label>
+      <textarea id="edit-reply" rows="3"></textarea>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-primary" onclick="saveEdit()">Save</button>
+      <button class="btn btn-outline" onclick="closeEdit()">Cancel</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function createWakeword() {
+  const phrase = document.getElementById('ww-phrase').value.trim();
+  const match_type = document.getElementById('ww-match').value;
+  const reply_text = document.getElementById('ww-reply').value.trim();
+  if (!phrase || !reply_text) { toast('Phrase and reply required','err'); return; }
+  try {
+    await apiFetch('/api/wakewords', { method:'POST', body:{phrase,match_type,reply_text} });
+    toast('Wakeword added!','ok');
+    setTimeout(() => location.reload(), 800);
+  } catch(e) { toast(e.message,'err'); }
+}
+
+async function toggleWW(id, enabled) {
+  try {
+    await apiFetch(`/api/wakewords/${id}`, { method:'PUT', body:{enabled} });
+    toast(enabled ? 'Enabled' : 'Disabled','ok');
+  } catch(e) { toast(e.message,'err'); }
+}
+
+async function deleteWW(id) {
+  if (!confirm('Delete this wakeword?')) return;
+  try {
+    await apiFetch(`/api/wakewords/${id}`, { method:'DELETE' });
+    document.getElementById(`ww-${id}`).remove();
+    toast('Deleted','ok');
+  } catch(e) { toast(e.message,'err'); }
+}
+
+function editWW(id, ww) {
+  document.getElementById('edit-id').value = id;
+  document.getElementById('edit-phrase').value = ww.phrase;
+  document.getElementById('edit-match').value = ww.match_type;
+  document.getElementById('edit-reply').value = ww.reply_text;
+  document.getElementById('edit-modal').style.display = 'flex';
+}
+function closeEdit() { document.getElementById('edit-modal').style.display = 'none'; }
+
+async function saveEdit() {
+  const id = document.getElementById('edit-id').value;
+  const body = {
+    phrase: document.getElementById('edit-phrase').value.trim(),
+    match_type: document.getElementById('edit-match').value,
+    reply_text: document.getElementById('edit-reply').value.trim(),
+  };
+  try {
+    await apiFetch(`/api/wakewords/${id}`, { method:'PUT', body });
+    toast('Saved!','ok');
+    closeEdit();
+    setTimeout(() => location.reload(), 600);
+  } catch(e) { toast(e.message,'err'); }
+}
+
+document.getElementById('edit-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('edit-modal')) closeEdit();
+});
+</script>
+{% endblock %}

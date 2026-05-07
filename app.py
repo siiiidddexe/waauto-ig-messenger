@@ -440,34 +440,21 @@ def public_queue():
 
 # ── Webhook ───────────────────────────────────────────────────────────────────
 
-@app.route("/webhook", methods=["GET"])
-def webhook_verify():
-    mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge", "")
-    logger.info("Webhook verify — mode=%s token_match=%s challenge=%s", mode, token == WEBHOOK_VERIFY_TOKEN, challenge)
-    if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
-        logger.info("Webhook verified OK")
-        from flask import Response
-        return Response(challenge, status=200, mimetype="text/plain")
-    logger.warning("Webhook verify FAILED — got token: %r expected: %r", token, WEBHOOK_VERIFY_TOKEN)
-    from flask import Response
-    return Response("Forbidden", status=403, mimetype="text/plain")
+@app.route("/webhook", methods=["GET", "POST"], strict_slashes=False)
+def webhook():
+    # ── GET: Meta verification handshake ──
+    if request.method == "GET":
+        mode      = request.args.get("hub.mode", "")
+        token     = request.args.get("hub.verify_token", "")
+        challenge = request.args.get("hub.challenge", "")
+        logger.info("Webhook GET — mode=%r token_ok=%s challenge=%r", mode, token == WEBHOOK_VERIFY_TOKEN, challenge)
+        if mode == "subscribe" and token == WEBHOOK_VERIFY_TOKEN:
+            logger.info("Webhook verified OK")
+            return challenge   # plain string → Flask returns text/html 200, exactly what Meta needs
+        logger.warning("Webhook verify FAILED — received token=%r", token)
+        return "Forbidden", 403
 
-
-@app.route("/webhook-test")
-def webhook_test():
-    """Quick sanity check — confirms the webhook endpoint is reachable and shows the verify token."""
-    return jsonify({
-        "status": "reachable",
-        "webhook_url": "https://instapy.logiclaunch.in/webhook",
-        "verify_token": WEBHOOK_VERIFY_TOKEN,
-        "instructions": "Use the verify_token above in the Meta dashboard. Token is read from WEBHOOK_VERIFY_TOKEN env var.",
-    })
-
-
-@app.route("/webhook", methods=["POST"])
-def webhook_receive():
+    # ── POST: incoming messages ──
     payload = request.get_json(force=True, silent=True) or {}
     if payload.get("object") not in ("instagram", "page"):
         return "ok", 200
@@ -538,6 +525,18 @@ def webhook_receive():
                     logger.error("AI agent reply failed: %s", exc)
 
     return "ok", 200
+
+
+# ── Webhook test ─────────────────────────────────────────────────────────────
+
+@app.route("/webhook-test")
+def webhook_test():
+    return jsonify({
+        "status": "reachable",
+        "webhook_url": "https://instapy.logiclaunch.in/webhook",
+        "verify_token": WEBHOOK_VERIFY_TOKEN,
+        "manual_test": f"https://instapy.logiclaunch.in/webhook?hub.mode=subscribe&hub.verify_token={WEBHOOK_VERIFY_TOKEN}&hub.challenge=test123",
+    })
 
 
 # ── Health ────────────────────────────────────────────────────────────────────

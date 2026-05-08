@@ -19,6 +19,16 @@ def _headers():
     return {"Content-Type": "application/json"}
 
 
+def _raise_with_detail(resp: requests.Response):
+    """Raise with the full Instagram error message instead of just the HTTP status."""
+    try:
+        err = resp.json()
+        msg = err.get("error", {}).get("message") or err.get("error") or resp.text
+    except Exception:
+        msg = resp.text
+    raise requests.HTTPError(f"Instagram API {resp.status_code}: {msg}", response=resp)
+
+
 def send_text_message(recipient_id: str, text: str) -> dict:
     """Send a plain text DM to an Instagram user."""
     url = f"{GRAPH_API_BASE}/{IG_USER_ID}/messages"
@@ -27,8 +37,10 @@ def send_text_message(recipient_id: str, text: str) -> dict:
         "message": {"text": text},
         "access_token": ACCESS_TOKEN,
     }
+    logger.info("Sending text to %s via %s", recipient_id, IG_USER_ID)
     resp = requests.post(url, json=payload, headers=_headers(), timeout=15)
-    resp.raise_for_status()
+    if not resp.ok:
+        _raise_with_detail(resp)
     return resp.json()
 
 
@@ -46,7 +58,8 @@ def send_media_message(recipient_id: str, media_url: str, media_type: str = "ima
         "access_token": ACCESS_TOKEN,
     }
     resp = requests.post(url, json=payload, headers=_headers(), timeout=15)
-    resp.raise_for_status()
+    if not resp.ok:
+        _raise_with_detail(resp)
     return resp.json()
 
 

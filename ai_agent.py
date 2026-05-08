@@ -1,14 +1,12 @@
-import os
 import logging
+import config
 
 logger = logging.getLogger(__name__)
 
 
 def _env_key() -> str:
-    """Assemble Gemini API key from the two env-var halves."""
-    p1 = os.environ.get("GEMINI_KEY_1", "")
-    p2 = os.environ.get("GEMINI_KEY_2", "")
-    return (p1 + p2).strip()
+    """Get assembled Gemini API key from config."""
+    return config.GEMINI_API_KEY
 
 
 def get_ai_reply(message_text: str, agent_config: dict) -> str | None:

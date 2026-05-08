@@ -1,4 +1,3 @@
-import os
 import json
 import logging
 import uuid
@@ -9,10 +8,8 @@ from flask import (
     redirect, url_for, session, abort, flash
 )
 from werkzeug.security import generate_password_hash, check_password_hash
-from dotenv import load_dotenv
 
-load_dotenv()
-
+import config
 import db
 import instagram as ig
 import ai_agent as ai
@@ -26,11 +23,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production-please")
+app.secret_key = config.SECRET_KEY
 
-WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN", "waauto_ig_verify_2026")
-ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "siddhantsundar2016@gmail.com")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "!Hesoyam3451")
+WEBHOOK_VERIFY_TOKEN = config.WEBHOOK_VERIFY_TOKEN
+ADMIN_EMAIL    = config.ADMIN_EMAIL
+ADMIN_PASSWORD = config.ADMIN_PASSWORD
 
 # ── Bootstrap ────────────────────────────────────────────────────────────────
 

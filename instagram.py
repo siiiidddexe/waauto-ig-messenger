@@ -2,17 +2,20 @@
 Instagram Messaging API client.
 Docs: https://developers.facebook.com/docs/messenger-platform/instagram
 """
-import os
 import json
 import logging
 import requests
-from typing import Optional
+import config
 
 logger = logging.getLogger(__name__)
 
 GRAPH_API_BASE = "https://graph.facebook.com/v21.0"
-ACCESS_TOKEN = os.environ.get("INSTAGRAM_ACCESS_TOKEN", "")
-IG_USER_ID = os.environ.get("INSTAGRAM_USER_ID", "17841436408611252")
+
+def _token():
+    return config.INSTAGRAM_ACCESS_TOKEN
+
+def _ig_id():
+    return config.INSTAGRAM_USER_ID
 
 
 def _headers():
@@ -31,13 +34,13 @@ def _raise_with_detail(resp: requests.Response):
 
 def send_text_message(recipient_id: str, text: str) -> dict:
     """Send a plain text DM to an Instagram user."""
-    url = f"{GRAPH_API_BASE}/{IG_USER_ID}/messages"
+    url = f"{GRAPH_API_BASE}/{_ig_id()}/messages"
     payload = {
         "recipient": {"id": recipient_id},
         "message": {"text": text},
-        "access_token": ACCESS_TOKEN,
+        "access_token": _token(),
     }
-    logger.info("Sending text to %s via %s", recipient_id, IG_USER_ID)
+    logger.info("Sending text to %s via %s", recipient_id, _ig_id())
     resp = requests.post(url, json=payload, headers=_headers(), timeout=15)
     if not resp.ok:
         _raise_with_detail(resp)
@@ -46,7 +49,7 @@ def send_text_message(recipient_id: str, text: str) -> dict:
 
 def send_media_message(recipient_id: str, media_url: str, media_type: str = "image") -> dict:
     """Send a media attachment DM."""
-    url = f"{GRAPH_API_BASE}/{IG_USER_ID}/messages"
+    url = f"{GRAPH_API_BASE}/{_ig_id()}/messages"
     payload = {
         "recipient": {"id": recipient_id},
         "message": {
@@ -55,7 +58,7 @@ def send_media_message(recipient_id: str, media_url: str, media_type: str = "ima
                 "payload": {"url": media_url, "is_reusable": True},
             }
         },
-        "access_token": ACCESS_TOKEN,
+        "access_token": _token(),
     }
     resp = requests.post(url, json=payload, headers=_headers(), timeout=15)
     if not resp.ok:
@@ -68,7 +71,7 @@ def get_user_profile(user_id: str) -> dict:
     url = f"{GRAPH_API_BASE}/{user_id}"
     params = {
         "fields": "name,profile_pic",
-        "access_token": ACCESS_TOKEN,
+        "access_token": _token(),
     }
     try:
         resp = requests.get(url, params=params, timeout=10)
@@ -97,7 +100,7 @@ def parse_webhook_payload(payload: dict) -> list[dict]:
     for entry in entries:
         for messaging in entry.get("messaging", []):
             sender_id = messaging.get("sender", {}).get("id")
-            if not sender_id or sender_id == IG_USER_ID:
+            if not sender_id or sender_id == _ig_id():
                 continue  # skip own messages echoed back
 
             msg = messaging.get("message", {})

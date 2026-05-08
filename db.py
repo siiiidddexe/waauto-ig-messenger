@@ -3,8 +3,9 @@ import os
 import secrets
 import hashlib
 from datetime import datetime
+import config
 
-DB_PATH = os.environ.get("DB_PATH", "messages.db")
+DB_PATH = config.DB_PATH
 
 # Ensure the directory exists (important when DB_PATH is e.g. /data/messages.db)
 _db_dir = os.path.dirname(DB_PATH)
@@ -124,8 +125,7 @@ def seed_admin(email: str, password_hash: str):
 
 def seed_ai_agent():
     now = datetime.utcnow().isoformat()
-    # Assemble Gemini key from env halves so it's pre-filled on first boot.
-    gemini_key = (os.environ.get("GEMINI_KEY_1", "") + os.environ.get("GEMINI_KEY_2", "")).strip()
+    gemini_key = config.GEMINI_API_KEY
     with get_conn() as conn:
         existing = conn.execute("SELECT id FROM ai_agent").fetchone()
         if not existing:
